@@ -11,7 +11,7 @@ licence.
 
 ## Current status
 
-**Phase 2 - backend foundation - is implemented and tested.**
+**Phase 3 - job system - is implemented and tested. Phases 1-2 (foundation) are also done.**
 
 | Area | Status |
 |---|---|
@@ -21,7 +21,7 @@ licence.
 | Structured JSON logging + correlation IDs | done (Phase 2) |
 | Standard JSON error envelope | done (Phase 2) |
 | OpenAPI 3.1 contract (`openapi.yaml`) | done (Phase 2) |
-| Job system (queue, progress, idempotency) | planned (Phase 3) |
+| Job system (queue, progress, idempotency, separate worker, restart recovery, HMAC callback) | done (Phase 3) |
 | Provider adapters (STT/TTS/footage/embeddings) | planned (Phase 4) |
 | Scene understanding + safety | planned (Phase 5) |
 | FFmpeg video engine | planned (Phase 6) |
@@ -85,6 +85,11 @@ copy .env.example .env      # Windows
 # 5. Start the API in dev mode (from the backend folder)
 cd backend
 python -m uvicorn app.main:app --reload --port 8000
+
+# 6. In a second terminal, start the worker (from the backend folder)
+#    The worker polls the jobs table and processes queued jobs.
+cd backend
+python -m app.workers.worker
 ```
 
 Open http://localhost:8000/docs for the interactive API docs.
@@ -121,17 +126,22 @@ Codes are `UPPER_SNAKE_CASE`.
 | `UPSTREAM_PROVIDER_ERROR` | 502 | yes | A configured AI/footage provider failed; another provider is tried or the job retries. |
 | `INTERNAL_ERROR` | 500 | no | Unexpected internal failure. |
 
-## API (Phase 2 surface)
+## API surface
 
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/health` | Liveness probe (app is up). |
-| GET | `/ready` | Readiness probe (DB + storage reachable). |
-| GET | `/openapi.json` | Live OpenAPI 3.1 schema. |
-| GET | `/docs` | Interactive API docs. |
+| Method | Path | Purpose | Status |
+|---|---|---|---|
+| GET | `/health` | Liveness probe (app is up). | done |
+| GET | `/ready` | Readiness probe (DB + storage reachable). | done |
+| POST | `/api/v1/broll/jobs` | Create a job (script / audio URL / scenes); returns 202 + `job_id` + status URL; `Idempotency-Key` supported. | done (Phase 3) |
+| GET | `/api/v1/jobs/{job_id}` | Job status + progress (0-100) + result/error. | done (Phase 3) |
+| GET | `/api/v1/broll/jobs/{job_id}/timeline`, `/manifest`, `/outputs` | Outputs download. | planned (Phase 6/7) |
+| GET | `/openapi.json` | Live OpenAPI 3.1 schema. | done |
+| GET | `/docs` | Interactive API docs. | done |
 
-Job endpoints (`POST /api/v1/broll/jobs`, `GET /api/v1/jobs/{job_id}`, outputs)
-are added in Phase 3 and will be documented in `openapi.yaml`.
+The worker (`python -m app.workers.worker`, run from the `backend/` folder) polls
+the jobs table and processes queued jobs. The current pipeline is an explicitly
+labelled placeholder (see `app/workers/pipeline.py`); the real pipeline is
+Phases 4-7.
 
 ## Batch runner
 

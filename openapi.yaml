@@ -35,6 +35,73 @@ paths:
           content:
             application/json:
               schema: {}
+  /api/v1/broll/jobs:
+    post:
+      tags:
+      - jobs
+      summary: Create a B-roll video generation job
+      description: 'Accept a script, audio URL, or scene list and queue a background
+        job.
+
+
+        Idempotency: send the same request twice with the same Idempotency-Key and
+
+        you get the same job back; the work is never done twice.'
+      operationId: create_job_api_v1_broll_jobs_post
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobCreateRequest'
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobAcceptedResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/jobs/{job_id}:
+    get:
+      tags:
+      - jobs
+      summary: Get job status and progress
+      operationId: get_job_status_api_v1_jobs__job_id__get
+      parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Job Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobStatusResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/_debug/error/{code}:
     get:
       tags:
@@ -90,6 +157,18 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
 components:
   schemas:
+    Captions:
+      properties:
+        burn_in:
+          type: boolean
+          title: Burn In
+          default: false
+        srt:
+          type: boolean
+          title: Srt
+          default: true
+      type: object
+      title: Captions
     EchoIn:
       properties:
         name:
@@ -112,6 +191,132 @@ components:
           title: Detail
       type: object
       title: HTTPValidationError
+    JobAcceptedResponse:
+      properties:
+        job_id:
+          type: string
+          title: Job Id
+        status:
+          type: string
+          title: Status
+        status_url:
+          type: string
+          title: Status Url
+      type: object
+      required:
+      - job_id
+      - status
+      - status_url
+      title: JobAcceptedResponse
+      description: Returned by POST /api/v1/broll/jobs (HTTP 202).
+    JobCreateRequest:
+      properties:
+        audio_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Audio Url
+        script:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Script
+        scenes:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/SceneItem'
+            type: array
+          - type: 'null'
+          title: Scenes
+        voice:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Voice
+        aspect_ratios:
+          items:
+            type: string
+            enum:
+            - '16:9'
+            - '9:16'
+            - '1:1'
+          type: array
+          minItems: 1
+          title: Aspect Ratios
+        style:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Style
+        avoid:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Avoid
+        captions:
+          anyOf:
+          - $ref: '#/components/schemas/Captions'
+          - type: 'null'
+        callback_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Callback Url
+      type: object
+      required:
+      - aspect_ratios
+      title: JobCreateRequest
+      description: Create a B-roll job. Exactly one of audio_url / script / scenes.
+    JobStatusResponse:
+      properties:
+        job_id:
+          type: string
+          title: Job Id
+        status:
+          type: string
+          title: Status
+        progress:
+          type: integer
+          title: Progress
+        result:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Result
+        error:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Error
+      type: object
+      required:
+      - job_id
+      - status
+      - progress
+      title: JobStatusResponse
+      description: Returned by GET /api/v1/jobs/{job_id}.
+    SceneItem:
+      properties:
+        text:
+          type: string
+          minLength: 1
+          title: Text
+          description: Narration text for the scene.
+        visual_hint:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Visual Hint
+          description: Optional visual guidance.
+      type: object
+      required:
+      - text
+      title: SceneItem
+      description: One pre-segmented scene (IncuBrix scene list support).
     ValidationError:
       properties:
         loc:

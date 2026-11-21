@@ -35,8 +35,9 @@ if settings.database_url.startswith("sqlite"):
     def _set_sqlite_pragmas(dbapi_conn, _record):  # noqa: ANN001
         """Run on every new SQLite connection."""
         cur = dbapi_conn.cursor()
-        cur.execute("PRAGMA journal_mode=WAL")     # better concurrency
+        cur.execute("PRAGMA journal_mode=WAL")      # better concurrency (api + worker share one file)
         cur.execute("PRAGMA synchronous=NORMAL")    # safe with WAL, faster
+        cur.execute("PRAGMA busy_timeout=5000")     # wait up to 5s instead of "database is locked"
         cur.execute("PRAGMA foreign_keys=ON")
         cur.close()
 

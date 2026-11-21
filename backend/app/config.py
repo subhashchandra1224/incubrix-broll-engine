@@ -60,6 +60,9 @@ class Settings(BaseSettings):
     job_max_concurrency: int = 1
     job_poll_interval_seconds: float = 1.0
     job_ttl_days: int = 7
+    # How many times a retryable error (e.g. UPSTREAM_PROVIDER_ERROR) re-queues
+    # a job before it fails permanently.
+    job_max_retries: int = 1
     # Anything expected to take longer than this runs as a background job
     # (POST returns 202). The brief sets this bar at 2 seconds.
     job_min_duration_seconds: float = 2.0

@@ -13,7 +13,7 @@ from fastapi import FastAPI
 
 from app.api.errors import register_exception_handlers
 from app.api.middleware import CorrelationIdMiddleware
-from app.api.routes import debug, health
+from app.api.routes import debug, health, jobs
 from app.config import get_settings
 
 settings = get_settings()
@@ -51,6 +51,7 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(CorrelationIdMiddleware)
     app.include_router(health.router)  # /health, /ready at root
+    app.include_router(jobs.router, prefix=settings.api_v1_prefix)  # /api/v1/broll/jobs, /api/v1/jobs/{id}
     if not settings.is_production:
         # Test-only routes to exercise the error envelope and logging.
         app.include_router(debug.router)
