@@ -1,0 +1,10 @@
+# Runtime dependencies for the B-roll Engine backend.
+# All have commercial-use licences (MIT / BSD-3). Confirmed with pip-licenses
+# before submission. See SOURCES.md.
+fastapi>=0.110
+uvicorn[standard]>=0.27
+pydantic>=2.6
+pydantic-settings>=2.2
+sqlalchemy>=2.0
+pyyaml>=6.0
+python-multipart>=0.0.9

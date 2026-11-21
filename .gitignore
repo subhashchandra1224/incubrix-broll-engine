@@ -1,0 +1,40 @@
+# ---- Secrets / environment ----
+.env
+.env.local
+*.env.local
+
+# ---- Confidential assignment files (never publish) ----
+IncuBrix_Assessment_3_*.pdf
+IncuBrix_Assessment_3_*.xlsx
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# ---- Virtual environments ----
+.venv/
+venv/
+
+# ---- Backend runtime data (SQLite DB, generated media) ----
+backend/data/
+backend/storage/
+backend/storage_test/
+
+# ---- Transient helper artifacts ----
+assignment_extract.log
+pip_install.log
+scripts/_extract_assignment.py
+
+# ---- Frontend ----
+frontend/node_modules/
+frontend/dist/
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
