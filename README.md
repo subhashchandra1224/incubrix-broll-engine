@@ -11,7 +11,7 @@ licence.
 
 ## Current status
 
-**Phase 5 — improved segmentation, local embeddings adapter, improved safety — is implemented and tested. Phases 1-4 are also done.**
+**Phase 8 — React + Vite frontend — is implemented and tested. Phases 1-7 are also done.**
 
 | Area | Status |
 |---|---|
@@ -26,9 +26,9 @@ licence.
 | Segmentation (gap-free, overlap-free, long-sentence splitting, timing labels) | done (Phase 5) |
 | Safety (avoid terms, named people/brands/sensitive/alcohol keyword blocklists) | done (Phase 5) |
 | Local embeddings adapter (`local-minilm` via fastembed, Apache-2.0, optional) | done (Phase 5); skipped when model not cached |
-| FFmpeg video engine | planned (Phase 6) |
-| Output metadata (timeline/manifest) | planned (Phase 7) |
-| Frontend | planned (Phase 8) |
+| FFmpeg video engine | done (Phase 6) |
+| Output metadata (timeline/manifest) + download endpoints | done (Phase 7) |
+| Frontend (React + Vite, connects to API) | done (Phase 8) |
 | Docker Compose + MinIO + batch runner + E2E tests | planned (Phase 9) |
 
 ## Architecture
@@ -96,6 +96,47 @@ python -m app.workers.worker
 
 Open http://localhost:8000/docs for the interactive API docs.
 
+## Frontend (local dev)
+
+The frontend is a minimal React + Vite app that talks to the backend API.
+
+```bash
+# from the project root
+cd frontend
+npm install
+npm run dev          # starts Vite dev server at http://localhost:5173
+```
+
+The Vite dev server proxies `/api` requests to the FastAPI backend at
+`http://localhost:8000` (see `frontend/vite.config.js`). Start the backend and
+worker first (steps 5-6 above), then start the frontend.
+
+```bash
+# terminal 1 — API
+cd backend && python -m uvicorn app.main:app --reload --port 8000
+
+# terminal 2 — worker
+cd backend && python -m app.workers.worker
+
+# terminal 3 — frontend
+cd frontend && npm run dev
+```
+
+Open http://localhost:5173 to use the UI. The frontend supports:
+- Script, audio URL, and scene-list inputs (with visual hints).
+- Aspect ratio selection (16:9, 9:16, 1:1).
+- Caption settings (SRT + burn-in).
+- Idempotency-Key (auto-generated, reused on retry).
+- Job progress polling with a progress bar.
+- Video preview and download links for MP4s, SRT, timeline.json, manifest.json.
+- Test-data labels and renderer warnings visible.
+- Burn-in badge shown only when the output metadata confirms it.
+
+To build for production:
+```bash
+cd frontend && npm run build     # outputs to frontend/dist/
+```
+
 ## Configuration
 
 All settings come from environment variables (or a `.env` file). Every
@@ -138,7 +179,7 @@ Codes are `UPPER_SNAKE_CASE`.
 | GET | `/ready` | Readiness probe (DB + storage reachable). | done |
 | POST | `/api/v1/broll/jobs` | Create a job (script / audio URL / scenes); returns 202 + `job_id` + status URL; `Idempotency-Key` supported. | done (Phase 3) |
 | GET | `/api/v1/jobs/{job_id}` | Job status + progress (0-100) + result/error. | done (Phase 3) |
-| GET | `/api/v1/broll/jobs/{job_id}/timeline`, `/manifest`, `/outputs` | Outputs download. | planned (Phase 6/7) |
+| GET | `/api/v1/broll/jobs/{job_id}/timeline`, `/manifest`, `/outputs` | Outputs download. | done (Phase 7) |
 | GET | `/openapi.json` | Live OpenAPI 3.1 schema. | done |
 | GET | `/docs` | Interactive API docs. | done |
 
