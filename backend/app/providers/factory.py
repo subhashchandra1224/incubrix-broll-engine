@@ -7,6 +7,10 @@ instead of silently making a paid call.
 
 Footage is special: the footage service tries a chain (primary + fallbacks),
 so it calls get_footage_provider(name) per name in the chain.
+
+Phase 5: the "local-minilm" embeddings adapter is registered here if fastembed
+is installed (import-time check). If not installed, selecting it raises
+ProviderNotConfiguredError cleanly.
 """
 from __future__ import annotations
 
@@ -42,12 +46,20 @@ _FOOTAGE: dict[str, type[FootageProvider]] = {
 }
 _SAFETY: dict[str, type[SafetyProvider]] = {"mock": MockSafety}
 
+# Register local-minilm only when fastembed is installed; fail cleanly otherwise.
+try:
+    from app.providers.local_embeddings import LocalMiniLMEmbeddings
+    _EMBEDDINGS["local-minilm"] = LocalMiniLMEmbeddings
+except ImportError:
+    pass
+
 
 def _select(registry: dict, name: str, kind: str):
     cls = registry.get(name)
     if cls is None:
         raise ProviderNotConfiguredError(
-            f"{kind} provider '{name}' is not available. Use 'mock' or configure a real provider.",
+            f"{kind} provider '{name}' is not available. "
+            "Use 'mock' or configure a real provider.",
             {"provider": name, "kind": kind},
         )
     return cls()
@@ -75,3 +87,19 @@ def get_footage_provider(name: str) -> FootageProvider:
 
 def get_safety_provider(name: str | None = None) -> SafetyProvider:
     return _select(_SAFETY, name or get_settings().safety_provider, "Safety")
+
+
+def is_local_minilm_available() -> bool:
+    """True when fastembed is installed, local-minilm is registered, AND the
+    model ONNX files are already cached on disk (no network needed to run tests).
+
+    This is the skip guard: real-embeddings tests are skipped if the model
+    has not been downloaded yet, keeping the default test suite fully offline.
+    """
+    if "local-minilm" not in _EMBEDDINGS:
+        return False
+    try:
+        from app.providers.local_embeddings import _is_model_cached
+        return _is_model_cached()
+    except Exception:
+        return False

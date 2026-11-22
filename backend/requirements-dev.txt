@@ -2,3 +2,6 @@
 -r requirements.txt
 pytest>=8.0
 httpx>=0.27
+# fastembed is installed separately for local-minilm tests:
+#   pip install fastembed
+# Tests skip gracefully when the library is absent or model not cached.

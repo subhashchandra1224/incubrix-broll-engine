@@ -1,13 +1,10 @@
-"""Phase 4 pipeline: a mock-provider pipeline that exercises STT/TTS, scene
-understanding, footage search (with fallback), safety, and relevance, and
-produces a draft scene plan.
+"""Phase 5 pipeline: improved segmentation (gap-free, overlap-free, long-sentence
+splitting), improved safety (named people, brands, sensitive topics, alcohol),
+and optional local embeddings (local-minilm via fastembed) for semantic relevance.
 
-IMPORTANT: no video is rendered yet (that is Phase 6). Every transcript, timing,
-footage clip, licence and relevance score produced here is TEST DATA (labelled),
-from mock adapters. Real adapters are added later behind the same interfaces.
-
-The job API contract is unchanged: this still returns a result dict stored on
-the job; the worker still drives it via run_pipeline(job, progress).
+IMPORTANT: no video is rendered yet (Phase 6). Every transcript, timing, footage
+clip, licence and relevance score is TEST DATA from mock adapters unless the
+local-minilm embeddings adapter is active. Labels are explicit in the result.
 """
 from __future__ import annotations
 
@@ -17,13 +14,14 @@ from app.api.errors import FootageUnavailableError
 from app.config import get_settings
 from app.schemas.providers import ClipSelection, Scene
 from app.services import footage_service, narration_service, scene_service
+from app.services.segmentation import validate_coverage
 
 log = logging.getLogger(__name__)
 settings = get_settings()
 
 
 def run_pipeline(job, progress) -> dict:
-    log.info("Phase 4 provider pipeline running for job %s (mock providers; no rendering)", job.id)
+    log.info("Phase 5 pipeline running for job %s (no rendering)", job.id)
     request = job.request or {}
     avoid = request.get("avoid") or []
 
@@ -32,6 +30,9 @@ def run_pipeline(job, progress) -> dict:
 
     progress(20)
     scenes = scene_service.build_scenes(request, transcript)
+
+    # Validate that scenes cover the narration without gaps or overlaps.
+    coverage_warnings = validate_coverage(scenes, duration)
 
     progress(40)
     plan: list[dict] = []
@@ -49,25 +50,29 @@ def run_pipeline(job, progress) -> dict:
 
     progress(80)
     if not any(p["clip"] for p in plan):
-        # Every scene failed to get footage -> fail the job with a clear error.
         raise FootageUnavailableError(
-            "No footage could be obtained for any scene (all providers failed or returned no usable results).",
+            "No footage could be obtained for any scene.",
             details={"unavailable_scenes": unavailable},
         )
 
     progress(100)
+    all_warnings = coverage_warnings + (
+        [f"{len(unavailable)} scene(s) without footage: {unavailable}"]
+        if unavailable else []
+    )
     return {
-        "pipeline": "phase4-mock-providers",
+        "pipeline": "phase5-providers",
         "test_data": True,
         "note": (
-            "Phase 4 provider pipeline using mock adapters. No video was rendered. "
-            "All transcripts, timings, footage and scores are test data."
+            "Phase 5 pipeline. No video rendered. All transcripts, timings, footage "
+            "and scores are test data unless local-minilm embeddings are active."
         ),
         "input_type": input_type,
         "narration_duration": round(duration, 3),
         "scene_count": len(scenes),
+        "coverage_warnings": coverage_warnings,
         "scenes": plan,
-        "warnings": [] if not unavailable else [f"{len(unavailable)} scene(s) without footage: {unavailable}"],
+        "warnings": all_warnings,
         "providers": {
             "stt": settings.stt_provider,
             "tts": settings.tts_provider,

@@ -54,7 +54,7 @@ def test_script_job_succeeds_with_draft_scene_plan():
     assert job.status == "succeeded"
     assert job.progress == 100
     r = job.result
-    assert r["pipeline"] == "phase4-mock-providers"
+    assert r["pipeline"] == "phase5-providers"
     assert r["test_data"] is True
     assert r["scene_count"] == 3
     sc = r["scenes"][0]
@@ -137,5 +137,5 @@ def test_job_api_contract_preserved_via_http(client):
     assert body["job_id"] == job_id
     assert body["status"] == "succeeded"
     assert body["progress"] == 100
-    assert body["result"]["pipeline"] == "phase4-mock-providers"
+    assert body["result"]["pipeline"] == "phase5-providers"
     assert body["error"] is None

@@ -59,10 +59,10 @@ version, and commercial-use status verified and recorded before enabling.
 |---|---|---|---|
 | Speech-to-text | mock (deterministic transcript + timestamps) | TBD (e.g. faster-whisper / Whisper API) - verify terms first | mock implemented (Phase 4); real adapter pending |
 | Text-to-speech | mock (duration + synthetic word timeline, no audio file yet) | TBD - must verify commercial-use terms | mock implemented (Phase 4); real adapter pending |
-| Scene understanding / visual description | mock (rule-based noun-phrase extraction) | TBD (LLM) - verify terms first | mock implemented (Phase 4); real adapter pending |
-| Semantic embeddings | mock (deterministic bag-of-words vector) | sentence-transformers / all-MiniLM-L6-v2 (Apache-2.0) | mock implemented (Phase 4); real adapter pending |
+| Scene understanding / visual description | mock (rule-based noun-phrase extraction + Phase 5 segmentation) | TBD (LLM) - verify terms first | mock implemented (Phase 5); real adapter pending |
+| Semantic embeddings | mock (deterministic bag-of-words) **OR** `local-minilm` (fastembed/MiniLM-L6-v2, Apache-2.0) | sentence-transformers/all-MiniLM-L6-v2 via fastembed | mock default (Phase 4); `local-minilm` optional adapter implemented (Phase 5); tests skip when model not cached |
 | Footage search | mock (deterministic clips with explicit mock test-data licence) | TBD (e.g. Pexels/Pixabay) - licences verified first | mock implemented (Phase 4); real adapter pending |
-| Safety | mock (avoid-term + blocklist rules) | TBD (LLM) - verify terms first | mock implemented (Phase 4); real adapter pending |
+| Safety | mock (avoid-term + hardcoded blocklists for people/brands/sensitive/alcohol) | TBD (LLM + NER) - verify terms first | mock implemented (Phase 5); real NER/vision pending |
 | Vision-language relevance (Outstanding) | - | TBD (e.g. CLIP, MIT) | not started |
 
 Phase 4 implements the interfaces (`app/providers/base.py`), a deterministic mock

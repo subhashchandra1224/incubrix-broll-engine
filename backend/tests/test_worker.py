@@ -49,7 +49,7 @@ def test_process_next_job_succeeds():
         assert job.status == "succeeded"
         assert job.progress == 100
         assert job.result is not None
-        assert job.result["pipeline"] == "phase4-mock-providers"
+        assert job.result["pipeline"] == "phase5-providers"
         assert job.result["test_data"] is True
         assert job.error is None
         assert job.finished_at is not None

@@ -11,7 +11,7 @@ licence.
 
 ## Current status
 
-**Phase 4 - provider adapters (interfaces + deterministic mocks) - is implemented and tested. Phases 1-3 are also done.**
+**Phase 5 — improved segmentation, local embeddings adapter, improved safety — is implemented and tested. Phases 1-4 are also done.**
 
 | Area | Status |
 |---|---|
@@ -23,7 +23,9 @@ licence.
 | OpenAPI 3.1 contract (`openapi.yaml`) | done (Phase 2) |
 | Job system (queue, progress, idempotency, separate worker, restart recovery, HMAC callback) | done (Phase 3) |
 | Provider adapters (interfaces + deterministic mocks: STT/TTS/scene/embeddings/footage/safety) | done (Phase 4) |
-| Scene understanding + safety | mocks done (Phase 4); real logic planned (Phase 5) |
+| Segmentation (gap-free, overlap-free, long-sentence splitting, timing labels) | done (Phase 5) |
+| Safety (avoid terms, named people/brands/sensitive/alcohol keyword blocklists) | done (Phase 5) |
+| Local embeddings adapter (`local-minilm` via fastembed, Apache-2.0, optional) | done (Phase 5); skipped when model not cached |
 | FFmpeg video engine | planned (Phase 6) |
 | Output metadata (timeline/manifest) | planned (Phase 7) |
 | Frontend | planned (Phase 8) |

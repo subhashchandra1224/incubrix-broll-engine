@@ -97,24 +97,30 @@ class MockTTS(TTSProvider):
 
 # -------------------------------------------------------------------- Scene U.
 class MockSceneUnderstanding(SceneUnderstandingProvider):
+    """Phase 5 improved mock: uses the segmentation module for consistent
+    boundary detection, gap-free timing, and long-sentence splitting."""
+
     name = "mock"
 
     def segment(self, transcript: Transcript, hints: list[dict] | None = None) -> list[Scene]:
-        sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", transcript.text.strip()) if s.strip()]
-        if not sentences:
-            sentences = [transcript.text]
+        from app.services.segmentation import segment_transcript
+
+        spans = segment_transcript(transcript)
         scenes: list[Scene] = []
-        wi = 0
-        for i, sent in enumerate(sentences):
-            n = len(sent.split())
-            sw = transcript.words[wi:wi + n]
-            wi += n
-            start = sw[0].start if sw else 0.0
-            end = sw[-1].end if sw else start
-            vd, sq = self._describe(sent)
-            scenes.append(Scene(scene_id=f"scene_{i + 1:03d}", text=sent,
-                                 start_time=round(start, 3), end_time=round(end, 3),
-                                 visual_description=vd, search_query=sq))
+        for i, (text, start, end, estimated) in enumerate(spans):
+            vd, sq = self._describe(text)
+            w: list[str] = []
+            if estimated:
+                w.append("timing is estimated (mock TTS — not from real audio)")
+            scenes.append(Scene(
+                scene_id=f"scene_{i + 1:03d}",
+                text=text,
+                start_time=start,
+                end_time=end,
+                visual_description=vd,
+                search_query=sq,
+                warnings=w,
+            ))
         return scenes
 
     def describe_one(self, text: str, hint: str | None = None) -> str:
@@ -217,19 +223,104 @@ class MockFootageEmpty(FootageProvider):
 
 # ------------------------------------------------------------------------ Safety
 class MockSafety(SafetyProvider):
+    """Phase 5 improved mock safety: avoid terms + hard blocklist rules.
+
+    Detects:
+    - User-supplied avoid terms in narration or clip description.
+    - Hardcoded safety categories: named real people, brand names,
+      sensitive/sad news topics, alcohol, faces.
+
+    What this mock CANNOT do (documented honestly):
+    - It cannot identify real faces in actual video frames.
+    - It cannot verify brand logos in footage.
+    - It uses simple keyword matching on text, not vision or NER.
+    - Named-people and brand detection covers only the hardcoded lists below;
+      an NER model is needed for full coverage (Phase 5 / later).
+    """
+
     name = "mock"
 
-    def check(self, scene_text: str, clip: FootageClip | None, avoid: list[str]) -> SafetyResult:
+    # Hardcoded sensitive categories (keyword-based, text-only).
+    _REAL_PEOPLE: frozenset[str] = frozenset({
+        "modi", "biden", "trump", "obama", "elon musk", "musk", "zuckerberg",
+        "putin", "xi jinping", "macron", "sunak", "gates", "bezos",
+    })
+    _BRANDS: frozenset[str] = frozenset({
+        "apple", "google", "microsoft", "amazon", "facebook", "meta",
+        "tesla", "samsung", "nike", "coca-cola", "coke", "mcdonalds",
+        "mcdonald's", "pepsi", "starbucks",
+    })
+    _SENSITIVE_TOPICS: frozenset[str] = frozenset({
+        "death", "murder", "suicide", "terrorist", "terrorism",
+        "massacre", "genocide", "rape", "shooting", "bombing",
+        "war", "explosion", "flood victims", "disaster",
+    })
+    _ALCOHOL: frozenset[str] = frozenset({
+        "alcohol", "beer", "wine", "whiskey", "vodka", "liquor",
+        "cocktail", "drunk", "drinking alcohol",
+    })
+
+    def check(
+        self, scene_text: str, clip: "FootageClip | None", avoid: list[str]
+    ) -> SafetyResult:
         reasons: list[str] = []
-        hay_scene = (scene_text or "").lower()
+        warnings: list[str] = []
+        hay = (scene_text or "").lower()
         hay_clip = (clip.description if clip else "").lower()
+
+        # 1. User-supplied avoid terms.
         for term in avoid or []:
             t = (term or "").strip().lower()
             if not t:
                 continue
-            if t in hay_scene:
+            if t in hay:
                 reasons.append(f"avoid term '{term}' found in narration")
             if clip and t in hay_clip:
                 reasons.append(f"avoid term '{term}' found in clip description")
-        return SafetyResult(allowed=not reasons, reasons=reasons,
-                             warnings=reasons, test_data=True)
+
+        # 2. Named real people (keyword-based, text-only).
+        for person in self._REAL_PEOPLE:
+            if person in hay:
+                warnings.append(
+                    f"Real person '{person}' detected in narration. "
+                    "Prefer generic contextual footage; do not use their likeness."
+                )
+                # Allow but warn; block if the clip description also mentions them.
+                if clip and person in hay_clip:
+                    reasons.append(
+                        f"Clip may show real person '{person}'. Blocked."
+                    )
+
+        # 3. Brand names.
+        for brand in self._BRANDS:
+            if brand in hay:
+                warnings.append(
+                    f"Brand '{brand}' detected in narration. "
+                    "Do not invent brand logos; prefer neutral visuals."
+                )
+                if clip and brand in hay_clip:
+                    reasons.append(
+                        f"Clip may show brand '{brand}'. Blocked."
+                    )
+
+        # 4. Sensitive/sad news topics.
+        for topic in self._SENSITIVE_TOPICS:
+            if topic in hay:
+                warnings.append(
+                    f"Sensitive topic '{topic}' detected. "
+                    "Use respectful, contextually appropriate visuals."
+                )
+
+        # 5. Alcohol.
+        for term in self._ALCOHOL:
+            if term in hay:
+                reasons.append(f"Alcohol-related term '{term}' in narration.")
+            if clip and term in hay_clip:
+                reasons.append(f"Alcohol-related term '{term}' in clip description.")
+
+        return SafetyResult(
+            allowed=not reasons,
+            reasons=reasons,
+            warnings=warnings,
+            test_data=True,
+        )

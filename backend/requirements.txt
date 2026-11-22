@@ -8,3 +8,9 @@ pydantic-settings>=2.2
 sqlalchemy>=2.0
 pyyaml>=6.0
 python-multipart>=0.0.9
+
+# Optional: local embeddings adapter (sentence-transformers/all-MiniLM-L6-v2 via ONNX).
+# Licence: fastembed Apache-2.0; model Apache-2.0. No torch required.
+# Install: pip install fastembed
+# NOT a default dependency — the test suite runs offline without it.
+# fastembed>=0.9.1
