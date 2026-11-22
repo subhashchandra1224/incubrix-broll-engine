@@ -57,13 +57,21 @@ version, and commercial-use status verified and recorded before enabling.
 
 | Capability | Default (no key) | Real adapter (optional) | Status |
 |---|---|---|---|
-| Speech-to-text | mock (deterministic transcript + timestamps) | TBD (e.g. faster-whisper / Whisper API) | mock only (Phase 4) |
-| Text-to-speech | mock (FFmpeg audio + synthetic word timeline) | TBD - must verify commercial-use terms | mock only (Phase 4) |
-| Scene understanding / visual description | mock (rule-based) | TBD (LLM) | mock only (Phase 5) |
-| Semantic embeddings | mock (hash pseudo-embedding) | sentence-transformers / all-MiniLM-L6-v2 (Apache-2.0) | mock only (Phase 4) |
-| Footage search | mock (synthetic FFmpeg clips, explicit mock licence) | TBD (e.g. Pexels/Pixabay) - licences verified first | mock only (Phase 4) |
-| Safety | mock (rule-based) | TBD (LLM) | mock only (Phase 5) |
+| Speech-to-text | mock (deterministic transcript + timestamps) | TBD (e.g. faster-whisper / Whisper API) - verify terms first | mock implemented (Phase 4); real adapter pending |
+| Text-to-speech | mock (duration + synthetic word timeline, no audio file yet) | TBD - must verify commercial-use terms | mock implemented (Phase 4); real adapter pending |
+| Scene understanding / visual description | mock (rule-based noun-phrase extraction) | TBD (LLM) - verify terms first | mock implemented (Phase 4); real adapter pending |
+| Semantic embeddings | mock (deterministic bag-of-words vector) | sentence-transformers / all-MiniLM-L6-v2 (Apache-2.0) | mock implemented (Phase 4); real adapter pending |
+| Footage search | mock (deterministic clips with explicit mock test-data licence) | TBD (e.g. Pexels/Pixabay) - licences verified first | mock implemented (Phase 4); real adapter pending |
+| Safety | mock (avoid-term + blocklist rules) | TBD (LLM) - verify terms first | mock implemented (Phase 4); real adapter pending |
 | Vision-language relevance (Outstanding) | - | TBD (e.g. CLIP, MIT) | not started |
+
+Phase 4 implements the interfaces (`app/providers/base.py`), a deterministic mock
+for each (`app/providers/mocks.py`), and config-selected wiring
+(`app/providers/factory.py`). This satisfies the brief's "swappable providers"
+rule: every external AI service sits behind a small adapter chosen by
+configuration, with a mock so tests run with no API keys. No API keys or paid
+calls are used in Phase 4; selecting a real adapter that is not wired raises
+`PROVIDER_NOT_CONFIGURED`.
 
 ## Footage providers
 

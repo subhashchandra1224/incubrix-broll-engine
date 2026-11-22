@@ -11,7 +11,7 @@ licence.
 
 ## Current status
 
-**Phase 3 - job system - is implemented and tested. Phases 1-2 (foundation) are also done.**
+**Phase 4 - provider adapters (interfaces + deterministic mocks) - is implemented and tested. Phases 1-3 are also done.**
 
 | Area | Status |
 |---|---|
@@ -22,8 +22,8 @@ licence.
 | Standard JSON error envelope | done (Phase 2) |
 | OpenAPI 3.1 contract (`openapi.yaml`) | done (Phase 2) |
 | Job system (queue, progress, idempotency, separate worker, restart recovery, HMAC callback) | done (Phase 3) |
-| Provider adapters (STT/TTS/footage/embeddings) | planned (Phase 4) |
-| Scene understanding + safety | planned (Phase 5) |
+| Provider adapters (interfaces + deterministic mocks: STT/TTS/scene/embeddings/footage/safety) | done (Phase 4) |
+| Scene understanding + safety | mocks done (Phase 4); real logic planned (Phase 5) |
 | FFmpeg video engine | planned (Phase 6) |
 | Output metadata (timeline/manifest) | planned (Phase 7) |
 | Frontend | planned (Phase 8) |
@@ -124,6 +124,8 @@ Codes are `UPPER_SNAKE_CASE`.
 | `CONFLICT` | 409 | no | Idempotency / identity conflict. |
 | `RATE_LIMITED` | 429 | yes | Too many requests in a window. |
 | `UPSTREAM_PROVIDER_ERROR` | 502 | yes | A configured AI/footage provider failed; another provider is tried or the job retries. |
+| `FOOTAGE_UNAVAILABLE` | 502 | no | All configured footage providers failed or returned no usable clips for a scene. |
+| `PROVIDER_NOT_CONFIGURED` | 500 | no | A selected provider adapter is not available (e.g. a real provider chosen without API keys). |
 | `INTERNAL_ERROR` | 500 | no | Unexpected internal failure. |
 
 ## API surface

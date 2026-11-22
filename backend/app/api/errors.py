@@ -79,6 +79,22 @@ class UpstreamProviderError(BrollError):
     retryable = True
 
 
+class FootageUnavailableError(BrollError):
+    """502 - all configured footage providers failed or returned no usable clips."""
+
+    code = "FOOTAGE_UNAVAILABLE"
+    status_code = 502
+    retryable = False
+
+
+class ProviderNotConfiguredError(BrollError):
+    """500 - a selected provider adapter is not available (e.g. real provider without API keys)."""
+
+    code = "PROVIDER_NOT_CONFIGURED"
+    status_code = 500
+    retryable = False
+
+
 # Map plain FastAPI HTTPExceptions to our UPPER_SNAKE codes.
 _STATUS_TO_CODE = {
     400: "INVALID_INPUT",

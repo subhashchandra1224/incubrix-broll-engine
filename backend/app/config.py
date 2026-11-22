@@ -76,6 +76,9 @@ class Settings(BaseSettings):
     embeddings_provider: str = "mock"
     scene_provider: str = "mock"
     footage_provider: str = "mock"
+    # Comma-separated provider names tried in order after the primary footage
+    # provider (the fallback chain). Empty by default.
+    footage_fallback_providers: str = ""
     safety_provider: str = "mock"
 
     # --- Provider credentials (all optional; never commit real values) ---
@@ -97,6 +100,19 @@ class Settings(BaseSettings):
     resolution_16_9: str = "1920x1080"
     resolution_9_16: str = "1080x1920"
     resolution_1_1: str = "1080x1080"
+
+    @property
+    def footage_provider_chain(self) -> list[str]:
+        """Ordered, de-duplicated footage provider list: primary then fallbacks."""
+        chain = [self.footage_provider]
+        chain.extend(p.strip() for p in self.footage_fallback_providers.split(",") if p.strip())
+        seen: set[str] = set()
+        out: list[str] = []
+        for p in chain:
+            if p not in seen:
+                seen.add(p)
+                out.append(p)
+        return out
 
     @property
     def is_testing(self) -> bool:
