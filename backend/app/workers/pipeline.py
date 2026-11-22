@@ -17,16 +17,21 @@ wired (see SOURCES.md for the TTS candidates under evaluation).
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import os
 import tempfile
+import time as _time
 
 from app.api.errors import FootageUnavailableError
 from app.config import get_settings
 from app.schemas.providers import ClipSelection, Scene
 from app.services import footage_service, narration_service, scene_service
+from app.services.manifest_service import build_manifest, write_manifest
 from app.services.rendering_service import render_job
 from app.services.segmentation import validate_coverage
+from app.services.timeline_service import build_timeline, write_timeline
 
 log = logging.getLogger(__name__)
 settings = get_settings()
@@ -39,6 +44,7 @@ def run_pipeline(job, progress) -> dict:
     aspect_ratios = request.get("aspect_ratios") or ["16:9"]
     burn_in = (request.get("captions") or {}).get("burn_in", False)
     write_srt = (request.get("captions") or {}).get("srt", True)
+    pipeline_start = _time.monotonic()
 
     progress(5)
     transcript, duration, input_type = narration_service.build_narration(request)
@@ -101,19 +107,29 @@ def run_pipeline(job, progress) -> dict:
                 "errors": out["validation_errors"],
             })
 
-    progress(100)
-    return {
-        "pipeline": "phase6-render",
+    # Compute deterministic seed from the request (for reproducibility).
+    seed = hashlib.sha256(
+        json.dumps(request, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()[:16]
+
+    # Collect fallback info (scenes where the primary provider was not used).
+    chain = settings.footage_provider_chain
+    fallbacks = _collect_fallbacks(plan, chain)
+
+    # Build the result dict.
+    result: dict = {
+        "pipeline": "phase7-metadata",
         "test_data": using_fixtures,
         "note": (
-            "Phase 6 pipeline. Rendered with FFmpeg using test fixtures (sine-tone "
+            "Phase 7 pipeline. Rendered with FFmpeg using test fixtures (sine-tone "
             "audio + colour-bar video). No real narration or footage."
             if using_fixtures else
-            "Phase 6 pipeline. Rendered with real narration and footage."
+            "Phase 7 pipeline. Rendered with real narration and footage."
         ),
         "input_type": input_type,
         "narration_duration": round(duration, 3),
         "scene_count": len(scenes),
+        "seed": seed,
         "coverage_warnings": coverage_warnings,
         "scenes": plan,
         "outputs": render_result.get("outputs", []),
@@ -129,6 +145,38 @@ def run_pipeline(job, progress) -> dict:
             "safety": settings.safety_provider,
         },
     }
+
+    # --- Generate timeline.json ---
+    timeline = build_timeline(
+        job_id=job.id,
+        scene_plan=plan,
+        total_duration=duration,
+        narration_duration=duration,
+        test_data=using_fixtures,
+        warnings=all_warnings,
+        fallbacks=fallbacks,
+    )
+    timeline_path = os.path.join(out_dir, "timeline.json")
+    write_timeline(timeline, timeline_path)
+    result["timeline_path"] = timeline_path
+
+    # --- Generate manifest.json ---
+    pipeline_end = _time.monotonic()
+    manifest = build_manifest(
+        job_id=job.id,
+        job_result=result,
+        request=request,
+        pipeline_start=pipeline_start,
+        pipeline_end=pipeline_end,
+        test_data=using_fixtures,
+        seed=seed,
+    )
+    manifest_path = os.path.join(out_dir, "manifest.json")
+    write_manifest(manifest, manifest_path)
+    result["manifest_path"] = manifest_path
+
+    progress(100)
+    return result
 
 
 def _resolve_media(request: dict, transcript, plan: list[dict], job_id: str) -> tuple[str, str, bool]:
@@ -196,3 +244,26 @@ def _scene_plan_unavailable(sc: Scene, reason: str) -> dict:
         "selection_reason": None,
         "warnings": [f"footage unavailable: {reason}"],
     }
+
+
+def _collect_fallbacks(plan: list[dict], chain: list[str]) -> list[dict]:
+    """Record scenes where the primary footage provider was not used (fallback).
+
+    Returns a list of {scene_id, primary_provider, used_provider, reason} dicts
+    for the timeline.json `fallbacks` field.
+    """
+    fallbacks: list[dict] = []
+    primary = chain[0] if chain else "mock"
+    for sc in plan:
+        clip = sc.get("clip")
+        if clip and clip.get("provider") != primary:
+            fallbacks.append({
+                "scene_id": sc["scene_id"],
+                "primary_provider": primary,
+                "used_provider": clip.get("provider"),
+                "reason": (
+                    f"Primary provider '{primary}' failed or returned no results; "
+                    f"used fallback '{clip.get('provider')}'."
+                ),
+            })
+    return fallbacks

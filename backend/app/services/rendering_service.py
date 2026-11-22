@@ -145,6 +145,7 @@ def render_job(
             try:
                 concat_clips_with_audio(
                     normalised_clips, narration_path, out_path,
+                    narration_duration=total_duration,
                     fps=30, timeout=300,
                 )
             except Exception as exc:  # noqa: BLE001

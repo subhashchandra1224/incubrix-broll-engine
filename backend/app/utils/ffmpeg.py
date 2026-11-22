@@ -238,18 +238,23 @@ def concat_clips_with_audio(
     narration_path: str,
     out_path: str,
     *,
+    narration_duration: float | None = None,
     fps: int = 30,
     timeout: int = 600,
 ) -> None:
     """Concatenate normalised video clips and mix in a narration audio track.
 
-    The narration audio is used as the master duration reference: if the
-    concatenated video is shorter, it is padded with the last frame; if longer,
-    it is trimmed. This satisfies 'narration sets the timing, not the clips'.
+    The narration audio is the master duration reference. Uses tpad to extend
+    video (cloning the last frame) if video is shorter than narration, and -t to
+    cap the output at exactly narration_duration. This guarantees the output
+    duration equals the narration duration, not the video duration — satisfying
+    the brief's requirement that 'the narration sets the timing, not the clips'.
 
     Args:
         clip_paths: list of already-normalised video-only files (same W/H/fps).
         narration_path: path to the narration AAC/WAV audio file.
+        narration_duration: expected narration duration in seconds. If None,
+            falls back to -shortest (less safe; prefer explicit duration).
         out_path: destination MP4 path.
     """
     ff = get_ffmpeg()
@@ -262,14 +267,20 @@ def concat_clips_with_audio(
             ff, "-y",
             "-f", "concat", "-safe", "0", "-i", concat_file,
             "-i", str(narration_path),
-            # narration is master: match video duration to audio
+            # tpad clones the last frame so video never runs out before -t.
+            "-vf", "tpad=stop_mode=clone",
+            # apad pads audio with silence if narration is slightly shorter.
+            "-af", "apad",
             "-map", "0:v:0", "-map", "1:a:0",
             "-c:v", "libx264", "-preset", "fast", "-crf", "23",
             "-c:a", "aac", "-ar", "48000", "-ac", "2",
-            # apad + shortest ensures video matches narration length exactly
-            "-af", "apad", "-shortest",
-            str(out_path),
         ]
+        if narration_duration is not None:
+            # -t caps the output at exactly narration_duration. Narration is master.
+            cmd += ["-t", str(narration_duration)]
+        else:
+            cmd += ["-shortest"]
+        cmd += [str(out_path)]
         _run(cmd, timeout=timeout, label="concat_clips_with_audio")
     finally:
         os.unlink(concat_file)

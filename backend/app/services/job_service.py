@@ -120,10 +120,29 @@ def get_job(db: Session, job_id: str) -> Job:
 
 
 def to_status_dict(job: Job) -> dict:
-    return {
+    import os
+    from app.config import get_settings
+    settings = get_settings()
+    base = {
         "job_id": job.id,
         "status": job.status,
         "progress": job.progress,
         "result": job.result,
         "error": job.error,
     }
+    # Add download links when the job has succeeded and outputs exist on disk.
+    if job.status == "succeeded" and job.result:
+        out_dir = os.path.join(settings.storage_local_root, "jobs", job.id)
+        if os.path.isdir(out_dir):
+            prefix = settings.api_v1_prefix
+            links = {
+                "self": f"{prefix}/jobs/{job.id}",
+                "timeline": f"{prefix}/broll/jobs/{job.id}/timeline",
+                "manifest": f"{prefix}/broll/jobs/{job.id}/manifest",
+                "outputs": f"{prefix}/broll/jobs/{job.id}/outputs",
+            }
+            for f in sorted(os.listdir(out_dir)):
+                if os.path.isfile(os.path.join(out_dir, f)):
+                    links[f] = f"{prefix}/broll/jobs/{job.id}/outputs/{f}"
+            base["links"] = links
+    return base

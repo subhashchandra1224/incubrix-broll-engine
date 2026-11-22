@@ -64,7 +64,7 @@ def test_script_job_renders_all_three_ratios():
     job = _get(job_id)
     assert job.status == "succeeded", f"status={job.status} error={job.error}"
     r = job.result
-    assert r["pipeline"] == "phase6-render"
+    assert r["pipeline"] == "phase7-metadata"
     assert r["test_data"] is True
     # Three output files produced.
     outputs = r.get("outputs", [])
@@ -164,7 +164,7 @@ def test_job_api_contract_preserved_e2e(client):
     assert g.status_code == 200
     body = g.json()
     assert body["status"] == "succeeded"
-    assert body["result"]["pipeline"] == "phase6-render"
+    assert body["result"]["pipeline"] == "phase7-metadata"
     assert body["result"]["test_data"] is True
     # Verify outputs are in the result.
     assert len(body["result"]["outputs"]) >= 1

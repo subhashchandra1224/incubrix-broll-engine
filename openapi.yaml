@@ -102,6 +102,115 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/broll/jobs/{job_id}/timeline:
+    get:
+      tags:
+      - jobs
+      summary: Download timeline.json
+      operationId: get_timeline_api_v1_broll_jobs__job_id__timeline_get
+      parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Job Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/broll/jobs/{job_id}/manifest:
+    get:
+      tags:
+      - jobs
+      summary: Download manifest.json
+      operationId: get_manifest_api_v1_broll_jobs__job_id__manifest_get
+      parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Job Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/broll/jobs/{job_id}/outputs:
+    get:
+      tags:
+      - jobs
+      summary: List output files for a job
+      operationId: list_outputs_api_v1_broll_jobs__job_id__outputs_get
+      parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Job Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response List Outputs Api V1 Broll Jobs  Job Id  Outputs Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/broll/jobs/{job_id}/outputs/{filename}:
+    get:
+      tags:
+      - jobs
+      summary: Download a single output file
+      operationId: download_output_api_v1_broll_jobs__job_id__outputs__filename__get
+      parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Job Id
+      - name: filename
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Filename
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/_debug/error/{code}:
     get:
       tags:
@@ -292,6 +401,13 @@ components:
             type: object
           - type: 'null'
           title: Error
+        links:
+          anyOf:
+          - additionalProperties:
+              type: string
+            type: object
+          - type: 'null'
+          title: Links
       type: object
       required:
       - job_id

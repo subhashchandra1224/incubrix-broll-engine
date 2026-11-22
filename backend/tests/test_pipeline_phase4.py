@@ -54,7 +54,7 @@ def test_script_job_succeeds_with_draft_scene_plan():
     assert job.status == "succeeded"
     assert job.progress == 100
     r = job.result
-    assert r["pipeline"] == "phase6-render"
+    assert r["pipeline"] == "phase7-metadata"
     assert r["test_data"] is True
     assert r["scene_count"] == 3
     sc = r["scenes"][0]
@@ -133,9 +133,9 @@ def test_job_api_contract_preserved_via_http(client):
     g = client.get(f"/api/v1/jobs/{job_id}")
     assert g.status_code == 200
     body = g.json()
-    assert set(body) == {"job_id", "status", "progress", "result", "error"}
+    assert {"job_id", "status", "progress", "result", "error"}.issubset(set(body))
     assert body["job_id"] == job_id
     assert body["status"] == "succeeded"
     assert body["progress"] == 100
-    assert body["result"]["pipeline"] == "phase6-render"
+    assert body["result"]["pipeline"] == "phase7-metadata"
     assert body["error"] is None

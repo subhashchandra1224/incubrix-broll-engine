@@ -65,3 +65,4 @@ class JobStatusResponse(BaseModel):
     progress: int
     result: Optional[dict[str, Any]] = None
     error: Optional[dict[str, Any]] = None
+    links: Optional[dict[str, str]] = None
