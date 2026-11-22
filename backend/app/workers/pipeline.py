@@ -1,19 +1,31 @@
-"""Phase 5 pipeline: improved segmentation (gap-free, overlap-free, long-sentence
-splitting), improved safety (named people, brands, sensitive topics, alcohol),
-and optional local embeddings (local-minilm via fastembed) for semantic relevance.
+"""Phase 6 pipeline: full render path using FFmpeg.
 
-IMPORTANT: no video is rendered yet (Phase 6). Every transcript, timing, footage
-clip, licence and relevance score is TEST DATA from mock adapters unless the
-local-minilm embeddings adapter is active. Labels are explicit in the result.
+The pipeline now:
+  1. Builds narration (mock TTS or STT — audio file from fixtures in test mode).
+  2. Segments into scenes.
+  3. Selects footage (mock provider returns fixture video paths in test mode).
+  4. Renders all requested aspect ratios with FFmpeg.
+  5. Generates SRT captions and optionally burns them in.
+  6. Validates outputs with FFprobe.
+  7. Returns a result dict with per-scene plan + rendered output paths.
+
+IMPORTANT: in automated tests the narration audio and video clips are
+deterministic test fixtures (sine-tone audio + colour-bar video) generated
+locally by FFmpeg. They are labelled test_data=True throughout. No real
+footage or real speech is produced until a live TTS / footage provider is
+wired (see SOURCES.md for the TTS candidates under evaluation).
 """
 from __future__ import annotations
 
 import logging
+import os
+import tempfile
 
 from app.api.errors import FootageUnavailableError
 from app.config import get_settings
 from app.schemas.providers import ClipSelection, Scene
 from app.services import footage_service, narration_service, scene_service
+from app.services.rendering_service import render_job
 from app.services.segmentation import validate_coverage
 
 log = logging.getLogger(__name__)
@@ -21,20 +33,21 @@ settings = get_settings()
 
 
 def run_pipeline(job, progress) -> dict:
-    log.info("Phase 5 pipeline running for job %s (no rendering)", job.id)
+    log.info("Phase 6 pipeline: job %s", job.id)
     request = job.request or {}
     avoid = request.get("avoid") or []
+    aspect_ratios = request.get("aspect_ratios") or ["16:9"]
+    burn_in = (request.get("captions") or {}).get("burn_in", False)
+    write_srt = (request.get("captions") or {}).get("srt", True)
 
     progress(5)
     transcript, duration, input_type = narration_service.build_narration(request)
 
-    progress(20)
+    progress(15)
     scenes = scene_service.build_scenes(request, transcript)
-
-    # Validate that scenes cover the narration without gaps or overlaps.
     coverage_warnings = validate_coverage(scenes, duration)
 
-    progress(40)
+    progress(30)
     plan: list[dict] = []
     used_ids: set[str] = set()
     unavailable: list[str] = []
@@ -48,30 +61,64 @@ def run_pipeline(job, progress) -> dict:
             plan.append(_scene_plan_unavailable(sc, exc.message))
             log.warning("Scene %s has no footage: %s", sc.scene_id, exc.message)
 
-    progress(80)
     if not any(p["clip"] for p in plan):
         raise FootageUnavailableError(
             "No footage could be obtained for any scene.",
             details={"unavailable_scenes": unavailable},
         )
 
-    progress(100)
+    # --- Obtain narration audio and per-clip video paths ---
+    # In test mode the TTS SynthesisResult.audio_path may be a fixture path.
+    # We build the narration audio from fixtures when no real audio is available.
+    progress(45)
+    narration_audio, out_dir, using_fixtures = _resolve_media(request, transcript, plan, job.id)
+
+    # --- Render ---
+    progress(55)
+    render_result = render_job(
+        scene_plan=plan,
+        narration_path=narration_audio,
+        total_duration=duration,
+        aspect_ratios=aspect_ratios,
+        out_dir=out_dir,
+        burn_in_captions=burn_in,
+        write_srt_file=write_srt,
+        test_data=using_fixtures,
+    )
+
+    progress(90)
     all_warnings = coverage_warnings + (
         [f"{len(unavailable)} scene(s) without footage: {unavailable}"]
         if unavailable else []
-    )
+    ) + render_result.get("warnings", [])
+
+    # Collect any validation errors from rendered outputs.
+    render_validation: list[dict] = []
+    for out in render_result.get("outputs", []):
+        if out.get("validation_errors"):
+            render_validation.append({
+                "path": out["path"],
+                "errors": out["validation_errors"],
+            })
+
+    progress(100)
     return {
-        "pipeline": "phase5-providers",
-        "test_data": True,
+        "pipeline": "phase6-render",
+        "test_data": using_fixtures,
         "note": (
-            "Phase 5 pipeline. No video rendered. All transcripts, timings, footage "
-            "and scores are test data unless local-minilm embeddings are active."
+            "Phase 6 pipeline. Rendered with FFmpeg using test fixtures (sine-tone "
+            "audio + colour-bar video). No real narration or footage."
+            if using_fixtures else
+            "Phase 6 pipeline. Rendered with real narration and footage."
         ),
         "input_type": input_type,
         "narration_duration": round(duration, 3),
         "scene_count": len(scenes),
         "coverage_warnings": coverage_warnings,
         "scenes": plan,
+        "outputs": render_result.get("outputs", []),
+        "srt_path": render_result.get("srt_path"),
+        "render_validation": render_validation,
         "warnings": all_warnings,
         "providers": {
             "stt": settings.stt_provider,
@@ -82,6 +129,41 @@ def run_pipeline(job, progress) -> dict:
             "safety": settings.safety_provider,
         },
     }
+
+
+def _resolve_media(request: dict, transcript, plan: list[dict], job_id: str) -> tuple[str, str, bool]:
+    """Return (narration_audio_path, output_dir, using_fixtures).
+
+    For tests (mock TTS, no audio_path): generate fixture audio and attach
+    fixture video paths to the plan in-place.
+    For real TTS / STT: use the audio path returned by the provider.
+    """
+    from app.utils.fixtures import generate_fixtures, DEFAULT_SCENE_DURATIONS
+
+    out_dir = os.path.join(settings.storage_local_root, "jobs", job_id)
+    os.makedirs(out_dir, exist_ok=True)
+
+    # Check if TTS produced a real audio file.
+    audio_path = getattr(transcript, "audio_path", None)
+    if not audio_path:
+        # Mock TTS: generate fixture media.
+        fix_dir = os.path.join(out_dir, "fixtures")
+        # Build per-scene durations from the plan.
+        durations = [
+            round(p["end_time"] - p["start_time"], 3)
+            for p in plan if p.get("clip") is not None
+        ] or DEFAULT_SCENE_DURATIONS
+
+        fixtures = generate_fixtures(fix_dir, scene_durations=durations)
+        # Attach fixture video paths to each plan entry that has a clip.
+        fix_idx = 0
+        for entry in plan:
+            if entry.get("clip") is not None and fix_idx < len(fixtures.scenes):
+                entry["clip"]["video_path"] = fixtures.scenes[fix_idx].video_path
+                fix_idx += 1
+        return fixtures.narration_path, out_dir, True
+
+    return audio_path, out_dir, False
 
 
 def _scene_plan(sc: Scene, sel: ClipSelection) -> dict:

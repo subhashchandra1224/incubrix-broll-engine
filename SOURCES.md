@@ -29,6 +29,7 @@ machine-generated proof.
 | sqlalchemy | >=2.0 | MIT | ORM / SQLite access | yes |
 | pyyaml | >=6.0 | MIT | OpenAPI YAML export | yes |
 | python-multipart | >=0.0.9 | MIT | Multipart file uploads | yes |
+| imageio-ffmpeg | 0.8.1 | BSD-2-Clause | Bundled FFmpeg binary (dev fallback) | yes |
 
 > Licence values above are from each project's published metadata and will be
 > confirmed with `pip-licenses` before submission. If any licence is found to
@@ -47,6 +48,38 @@ machine-generated proof.
 
 To be added when the frontend is built (React + Vite). Will list `react`,
 `vite`, `axios`/`fetch` and their licences.
+
+## FFmpeg
+
+FFmpeg is used as the video rendering engine (Must-have 4). It is invoked as
+an external subprocess — the binary is not linked into the application code.
+
+| Item | Details |
+|---|---|
+| Package | FFmpeg 9.1 (Gyan.dev full build, Windows); 9.0.2 (imageio-ffmpeg bundled) |
+| Binary licence | LGPL 2.1+ for the core; compiled with `--enable-gpl` → GPL 2.0+ for the full build; we invoke it as an external binary and do not distribute our own modified build, so this does not affect our application's licence |
+| Usage | Normalise, scale+pad, concat, mix narration, encode H.264/AAC, generate SRT burn-in, run blackdetect/freezedetect |
+| Docker | Bundled in the application Docker image (Phase 9: `apt-get install ffmpeg`) |
+| Commercial use | Permitted when used as an external tool; full-build GPL libraries are not linked into our application |
+| FFprobe | Ships with FFmpeg; used for codec/resolution/fps/duration/drift validation |
+| imageio-ffmpeg | 0.8.1, BSD-2-Clause — Python package that bundles a static FFmpeg binary; used as a fallback when system FFmpeg is not in PATH |
+
+## TTS candidates evaluated for the live demo
+
+The live demo requires a real TTS adapter with verified commercial-use terms.
+The following options were evaluated. **None has been enabled yet** — the default
+test path remains mock TTS only.
+
+| Option | Licence / Terms | Commercial use | API key required | Cost | Decision |
+|---|---|---|---|---|---|
+| `edge-tts` (Python wrapper for Microsoft Edge Read Aloud) | MIT wrapper licence; **Microsoft Service Agreement** governs the underlying service. Section 3 ("Your Content") and prohibited uses must be reviewed. The service is not authorised for commercial production use without a Microsoft Azure Text-to-Speech subscription. **Verdict: do not use the edge-tts wrapper for commercial production.** Use Azure TTS directly with a subscription. | Needs Azure TTS subscription for commercial use | Azure key required (not keyless as the wrapper appears) | Azure TTS ~$4/1M chars (Neural); free tier 500K chars/month | Rejected for default path; Azure TTS accepted if key is configured |
+| `gTTS` (Google Text-to-Speech) | MIT wrapper; Google Cloud TTS Terms of Service restrict commercial use. Free tier with API key; paid beyond quota. | Needs Google Cloud API key; ToS permits commercial use with a key | Yes | Google Cloud TTS ~$4–$16/1M chars depending on voice | Accepted in principle; wire as `google-tts` adapter when key configured |
+| Coqui TTS (open-source, local) | Mozilla Public License 2.0 (MPL-2.0) for the library. Some model weights are CC BY-SA 4.0 (non-commercial for derivatives). **Verify model licence before using any specific model.** | MPL-2.0 permits commercial use of the library; model licence is per-model | No key required (local) | Compute cost only | Accepted in principle for local/offline use; must verify model licence per-model |
+| `pyttsx3` (offline, OS TTS) | MIT; uses OS-bundled TTS (SAPI5 on Windows, espeak on Linux) | Permitted; quality is low | No | Free | Accepted as low-quality fallback; not suitable for production demo |
+
+**Recommendation:** wire Coqui TTS (MPL-2.0, `tts_models/en/vctk/vits`, CC BY 3.0 — commercial use permitted) as the first real TTS option. Record model details here before enabling it.
+
+
 
 ## AI models and providers
 

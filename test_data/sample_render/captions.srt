@@ -1,0 +1,12 @@
+# TEST-DATA captions generated from mock narration timings.
+1
+00:00:00,000 --> 00:00:03,000
+Saving money starts with small decisions.
+
+2
+00:00:03,000 --> 00:00:06,000
+Track your monthly expenses carefully.
+
+3
+00:00:06,000 --> 00:00:09,000
+A clear budget builds long-term security.
