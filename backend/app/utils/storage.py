@@ -54,7 +54,8 @@ class LocalStorage(StorageBackend):
     def store(self, local_path: str, key: str) -> str:
         dst = self._full(key)
         os.makedirs(os.path.dirname(dst), exist_ok=True)
-        if os.path.abspath(local_path) != dst:
+        # If source and destination resolve to the same path, no copy needed.
+        if os.path.abspath(local_path) != os.path.abspath(dst):
             import shutil
             shutil.copy2(local_path, dst)
         return self.public_url(key)

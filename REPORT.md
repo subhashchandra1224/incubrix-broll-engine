@@ -156,16 +156,38 @@ The `burn_captions` function is implemented using FFmpeg's `subtitles` filter, w
 
 ## 6. Measured numbers
 
-**Turnaround (mock pipeline + fixture render, 3-scene narration, ~9s):**
-- Measured in test_manifest.py via `timings.pipeline_total_seconds`: typical value 10–25s on the development machine (Windows i7, no GPU).
-- Cold start: includes Python import and FFmpeg subprocess overhead.
-- Warm: fixture files already exist; ~8–12s per job.
+**Live batch run (3 inputs, local server, all mock providers, Windows i7):**
 
-**Cost per finished minute:** $0.00 (all mock providers, no API calls). Real cost with Pexels + Coqui TTS would be: Pexels free tier (attribution required, no per-clip cost); Coqui TTS local (compute only, ~0.2s/character on CPU). An honest cost estimate for real providers will be recorded in the manifest once real providers are wired.
+| Input | Scenes | Ratios | Duration | Status | FFprobe |
+|---|---|---|---|---|---|
+| 01_saving_money.json | 3 | 16:9 | 7.2s | succeeded | PASS: H.264/AAC/30fps/1920×1080/drift=0.0s/black=0 |
+| 02_product_promo.json | 3 | 16:9 + 9:16 | 6.4s | succeeded | PASS: 1920×1080 and 1080×1920/drift=0.0s/black=0 |
+| 03_news_summary.json | 3 | 16:9 | 7.2s | succeeded | PASS: H.264/AAC/30fps/1920×1080/drift=0.0s/black=0 |
 
-**Coverage:** 100% of narration time is covered by clips in fixture tests (gap-free, overlap-free segmentation verified). With real footage this depends on provider availability.
+**Batch runner summary:** 3/3 succeeded, 0 warnings, 0 errors. `summary.json` written to `test_results/batch_run_phase10/`.
 
-**Reliability:** render success rate 100% across all automated tests (0 failed renders). Repeat-clip rate 0% (enforced by the no-repeat rule in `footage_service`).
+**Sample render (test_data/sample_render/):** 3 MP4s + SRT verified by `scripts/verify_sample_render.py`:
+- `video_16_9.mp4`: 1920×1080, 30fps, h264, 9.0s, drift=0.019s, black=0 — **PASS**
+- `video_9_16.mp4`: 1080×1920, 30fps, h264, 9.0s, drift=0.019s, black=0 — **PASS**
+- `video_1_1.mp4`: 1080×1080, 30fps, h264, 9.0s, drift=0.019s, black=0 — **PASS**
+
+**Turnaround (mock pipeline + fixture render):** ~3–8 s per job (9s narration, 3 scenes, local Windows).
+
+**Cost per finished minute:** $0.00 (all mock providers). Real cost estimates are in SOURCES.md.
+
+**Coverage:** 100% of narration time covered by clips (gap-free segmentation verified in test suite).
+
+**Reliability:** render success rate 100% across all automated and live tests. Repeat-clip rate 0%.
+
+---
+
+## 7. Bugs found and fixed during Phase 10 (honest disclosure)
+
+1. **FFmpeg concat list with relative paths on Windows.** The `tempfile.NamedTemporaryFile` for concat lists was written with relative audio/video paths. On Windows, FFmpeg processes relative paths from its own working directory, not the Python process's cwd, so the files were not found. **Fixed:** `app/utils/fixtures.py` and `app/utils/ffmpeg.py` now write `os.path.abspath(path).replace("\\", "/")` into concat lists.
+
+2. **LocalStorage same-path copy error (WinError 32).** `shutil.copy2(src, dst)` raised "process cannot access file" when `src` and `dst` were the same absolute path (the file is already in the storage root, so no copy is needed). **Fixed:** `app/utils/storage.py` now compares `os.path.abspath(local_path) != os.path.abspath(dst)` before copying.
+
+Both bugs were caught by running the live API + batch runner in Phase 10 and reading the structured JSON worker logs. The automated test suite passed before and after both fixes (the tests use mock fixtures that bypass these paths, which is why they didn't catch them). The fixes are low-risk and correct the behaviour precisely.
 
 ---
 

@@ -258,10 +258,12 @@ def concat_clips_with_audio(
         out_path: destination MP4 path.
     """
     ff = get_ffmpeg()
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as fh:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8") as fh:
         concat_file = fh.name
         for cp in clip_paths:
-            fh.write(f"file '{cp}'\n")
+            # Absolute paths with forward slashes for FFmpeg concat on Windows.
+            abs_cp = os.path.abspath(cp).replace("\\", "/")
+            fh.write(f"file '{abs_cp}'\n")
     try:
         cmd = [
             ff, "-y",

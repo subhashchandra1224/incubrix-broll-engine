@@ -137,10 +137,12 @@ def generate_fixtures(
         _sh.copy2(audio_parts[0], narration_path)
     else:
         import tempfile as _tf
-        with _tf.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as fh:
+        with _tf.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8") as fh:
             concat_file = fh.name
             for ap in audio_parts:
-                fh.write(f"file '{ap}'\n")
+                # Use absolute paths with forward slashes; FFmpeg concat needs this on Windows.
+                abs_ap = os.path.abspath(ap).replace("\\", "/")
+                fh.write(f"file '{abs_ap}'\n")
         try:
             _run([
                 ff, "-y",
