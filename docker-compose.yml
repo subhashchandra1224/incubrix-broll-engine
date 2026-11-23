@@ -1,0 +1,127 @@
+version: "3.9"
+
+# ============================================================
+#  B-roll Engine — one-command local stack
+#  docker compose up --build
+#
+#  Services:
+#    api      — FastAPI on port 8000 (also via nginx on 3000)
+#    worker   — background job processor
+#    frontend — React SPA served by nginx on port 3000
+#    minio    — S3-compatible object store on port 9000 / console 9001
+#    mc       — one-shot MinIO setup (creates bucket, exits)
+# ============================================================
+
+x-backend-env: &backend-env
+  DATABASE_URL: "sqlite:////data/broll.db"
+  STORAGE_BACKEND: "${STORAGE_BACKEND:-s3}"
+  STORAGE_LOCAL_ROOT: "/storage"
+  S3_ENDPOINT_URL: "http://minio:9000"
+  S3_BUCKET: "${S3_BUCKET:-broll-engine}"
+  S3_ACCESS_KEY: "${MINIO_ROOT_USER:-minioadmin}"
+  S3_SECRET_KEY: "${MINIO_ROOT_PASSWORD:-minioadmin}"
+  S3_REGION: "us-east-1"
+  LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+  LOG_JSON: "true"
+  STT_PROVIDER: "${STT_PROVIDER:-mock}"
+  TTS_PROVIDER: "${TTS_PROVIDER:-mock}"
+  SCENE_PROVIDER: "${SCENE_PROVIDER:-mock}"
+  EMBEDDINGS_PROVIDER: "${EMBEDDINGS_PROVIDER:-mock}"
+  FOOTAGE_PROVIDER: "${FOOTAGE_PROVIDER:-mock}"
+  FOOTAGE_FALLBACK_PROVIDERS: "${FOOTAGE_FALLBACK_PROVIDERS:-}"
+  SAFETY_PROVIDER: "${SAFETY_PROVIDER:-mock}"
+  CALLBACK_HMAC_SECRET: "${CALLBACK_HMAC_SECRET:-}"
+  JOB_MAX_RETRIES: "1"
+  MAX_UPLOAD_BYTES: "104857600"
+
+services:
+  # ---- MinIO object store ----
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: "${MINIO_ROOT_USER:-minioadmin}"
+      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:-minioadmin}"
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  # ---- MinIO setup (runs once then exits) ----
+  mc:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+        mc alias set local http://minio:9000 $${MINIO_ROOT_USER:-minioadmin} $${MINIO_ROOT_PASSWORD:-minioadmin} &&
+        mc mb --ignore-existing local/$${S3_BUCKET:-broll-engine} &&
+        mc anonymous set download local/$${S3_BUCKET:-broll-engine} &&
+        echo 'MinIO bucket ready'
+      "
+    environment:
+      MINIO_ROOT_USER: "${MINIO_ROOT_USER:-minioadmin}"
+      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:-minioadmin}"
+      S3_BUCKET: "${S3_BUCKET:-broll-engine}"
+
+  # ---- API server ----
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      <<: *backend-env
+      ENVIRONMENT: "${ENVIRONMENT:-dev}"
+    volumes:
+      - db_data:/data
+      - job_outputs:/storage
+    depends_on:
+      mc:
+        condition: service_completed_successfully
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ---- Worker ----
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: ["python", "-m", "app.workers.worker"]
+    environment:
+      <<: *backend-env
+      ENVIRONMENT: "${ENVIRONMENT:-dev}"
+    volumes:
+      - db_data:/data
+      - job_outputs:/storage
+    depends_on:
+      api:
+        condition: service_healthy
+
+  # ---- Frontend (nginx + React SPA + API proxy) ----
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+
+volumes:
+  minio_data:
+  db_data:
+  job_outputs:

@@ -11,6 +11,8 @@ python-multipart>=0.0.9
 # imageio-ffmpeg ships a static FFmpeg binary — used as a fallback when system
 # FFmpeg is not in PATH (local dev without winget install). Licence: BSD-2-Clause.
 imageio-ffmpeg>=0.4.9
+# boto3 for MinIO / S3 storage (Integration Standard #7).
+boto3>=1.34
 
 # Optional: local embeddings adapter (sentence-transformers/all-MiniLM-L6-v2 via ONNX).
 # Licence: fastembed Apache-2.0; model Apache-2.0. No torch required.

@@ -11,7 +11,7 @@ licence.
 
 ## Current status
 
-**Phase 8 — React + Vite frontend — is implemented and tested. Phases 1-7 are also done.**
+**Phase 9 — Docker Compose, MinIO, audio upload, batch runner — is implemented and tested. Phases 1-8 are also done.**
 
 | Area | Status |
 |---|---|
@@ -29,7 +29,11 @@ licence.
 | FFmpeg video engine | done (Phase 6) |
 | Output metadata (timeline/manifest) + download endpoints | done (Phase 7) |
 | Frontend (React + Vite, connects to API) | done (Phase 8) |
-| Docker Compose + MinIO + batch runner + E2E tests | planned (Phase 9) |
+| Docker Compose (api + worker + frontend + MinIO) | done (Phase 9); MinIO pull blocked in this sandbox (see below) |
+| Audio file upload endpoint | done (Phase 9) |
+| MinIO / S3 storage abstraction | done (Phase 9; local tested, S3 tested with mock) |
+| Batch runner | done (Phase 9) |
+| Docker Compose + MinIO + batch runner + E2E tests | done (Phase 9) |
 
 ## Architecture
 
@@ -190,9 +194,78 @@ Phases 4-7.
 
 ## Batch runner
 
-Planned (Phase 9): `python scripts/batch_runner.py <inputs_dir> <out_dir>`
-submits a folder of test inputs, polls until done, and downloads all results
-into one folder with a summary report.
+```bash
+# From the project root (requires the API to be running):
+python scripts/batch_runner.py test_data/batch_inputs test_results/batch_run
+
+# Against a Docker Compose stack on a different port:
+python scripts/batch_runner.py test_data/batch_inputs test_results/batch_run --api http://localhost:8000
+```
+
+The batch runner:
+1. Submits every JSON file in the input folder as a job (with a stable
+   Idempotency-Key per file, so re-running the same batch is idempotent).
+2. Polls every 3 s until all jobs are terminal (timeout 600 s).
+3. Downloads all output files into `<out_dir>/<job_id>/`.
+4. Writes a `summary.json` with job IDs, status, timings, warnings, and errors.
+
+One command for keyless tests (all mock providers, no API keys required):
+
+```bash
+# terminal 1
+cd backend && python -m uvicorn app.main:app --reload --port 8000
+# terminal 2
+cd backend && python -m app.workers.worker
+# terminal 3 — run batch
+python scripts/batch_runner.py test_data/batch_inputs test_results/batch_run
+```
+
+## Docker startup
+
+One-command start (requires Docker + Docker Compose, and Docker Hub access to
+pull `minio/minio` and `minio/mc`):
+
+```bash
+docker compose up --build
+```
+
+| URL | Service |
+|---|---|
+| `http://localhost:3000` | React frontend |
+| `http://localhost:8000` | FastAPI backend |
+| `http://localhost:9000` | MinIO S3 endpoint |
+| `http://localhost:9001` | MinIO console (`minioadmin` / `minioadmin`) |
+
+> **Note (sandbox limitation):** In the development sandbox used to build this
+> project, Docker Hub image pulls (`minio/minio:latest`, `minio/mc:latest`)
+> were blocked by authentication restrictions. All three application images
+> (`inc-api`, `inc-worker`, `inc-frontend`) built and ran successfully via
+> `docker compose build`. The MinIO stack has been configured and tested with
+> mock-boto3 unit tests; a live MinIO integration requires Docker Hub access.
+> On a machine with Docker Hub access, `docker compose up --build` starts the
+> full stack.
+
+Variables for the full stack are in `.env.example`.
+
+## Audio upload
+
+The API accepts audio files via multipart POST alongside the existing JSON input:
+
+```bash
+# Multipart upload (browser FormData or curl)
+curl -X POST http://localhost:8000/api/v1/broll/jobs/upload \
+  -F "audio=@voiceover.wav;type=audio/wav" \
+  -F 'aspect_ratios=["16:9"]' \
+  -F 'captions={"srt":true}'
+
+# JSON (existing — unchanged)
+curl -X POST http://localhost:8000/api/v1/broll/jobs \
+  -H "Content-Type: application/json" \
+  -d '{"script":"...", "aspect_ratios":["16:9"]}'
+```
+
+Both endpoints honour `Idempotency-Key`. Supported formats: mp3, wav, m4a.
+Maximum size: 100 MB. Maximum duration: 10 minutes.
 
 ## Troubleshooting
 

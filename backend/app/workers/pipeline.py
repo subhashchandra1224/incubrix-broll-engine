@@ -175,6 +175,38 @@ def run_pipeline(job, progress) -> dict:
     write_manifest(manifest, manifest_path)
     result["manifest_path"] = manifest_path
 
+    # --- Upload artifacts to storage (local or MinIO / S3) ---
+    from app.utils.storage import get_storage
+    store = get_storage()
+    upload_errors: list[str] = []
+    artifact_urls: dict[str, str] = {}
+    # Collect all artifact paths: videos, SRT, timeline, manifest, narration audio.
+    artifacts: list[tuple[str, str]] = []
+    for out in result.get("outputs", []):
+        p = out.get("path")
+        if p and os.path.isfile(p):
+            fname = os.path.basename(p)
+            artifacts.append((p, f"jobs/{job.id}/{fname}"))
+    for name, key_field in [
+        ("srt_path", "captions.srt"),
+        ("timeline_path", "timeline.json"),
+        ("manifest_path", "manifest.json"),
+    ]:
+        p = result.get(name)
+        if p and os.path.isfile(p):
+            artifacts.append((p, f"jobs/{job.id}/{key_field}"))
+    for local_path, key in artifacts:
+        try:
+            url = store.store(local_path, key)
+            artifact_urls[os.path.basename(key)] = url
+        except Exception as exc:  # noqa: BLE001
+            msg = f"Storage upload failed for {os.path.basename(key)}: {exc}"
+            upload_errors.append(msg)
+            log.warning(msg)
+    if upload_errors:
+        result.setdefault("warnings", []).extend(upload_errors)
+    result["artifact_urls"] = artifact_urls
+
     progress(100)
     return result
 

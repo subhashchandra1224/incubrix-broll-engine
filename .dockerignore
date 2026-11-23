@@ -1,0 +1,2 @@
+# Root-level .dockerignore isn't used by per-service builds.
+# See backend/.dockerignore and frontend/.dockerignore below.

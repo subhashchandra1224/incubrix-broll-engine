@@ -1,27 +1,27 @@
-"""Job API routes: create a job (POST), query status/progress (GET), and
+"""Job API routes: create a job (POST JSON or multipart upload), status/progress (GET),
 download outputs (timeline, manifest, MP4s, SRT).
 
-Routes are mounted under the /api/v1 prefix in app.main, giving:
-    POST /api/v1/broll/jobs                    -> 202 {job_id, status, status_url}
-    GET  /api/v1/jobs/{job_id}                 -> 200 {job_id, status, progress, result, error, links}
+Routes mounted under /api/v1:
+    POST /api/v1/broll/jobs                    -> 202 (JSON body)
+    POST /api/v1/broll/jobs/upload             -> 202 (multipart: audio file + JSON fields)
+    GET  /api/v1/jobs/{job_id}                 -> 200 {job_id,status,progress,result,error,links}
     GET  /api/v1/broll/jobs/{job_id}/timeline  -> 200 timeline.json
     GET  /api/v1/broll/jobs/{job_id}/manifest  -> 200 manifest.json
-    GET  /api/v1/broll/jobs/{job_id}/outputs   -> 200 {job_id, status, outputs: [...]}
+    GET  /api/v1/broll/jobs/{job_id}/outputs   -> 200 file list
     GET  /api/v1/broll/jobs/{job_id}/outputs/{filename} -> file stream
 
-Downloads are scoped to the job's own output directory; path traversal is
-blocked by validating the filename (no /, \\, or ..).
+Both create endpoints honour Idempotency-Key and preserve idempotency guarantees.
 """
 from __future__ import annotations
 
 import json
 import os
 
-from fastapi import APIRouter, Depends, Header, status
+from fastapi import APIRouter, Depends, File, Form, Header, UploadFile, status
 from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy.orm import Session
 
-from app.api.errors import NotFoundError
+from app.api.errors import InvalidInputError, NotFoundError
 from app.config import get_settings
 from app.db.database import get_db
 from app.schemas.job import JobAcceptedResponse, JobCreateRequest, JobStatusResponse
@@ -50,6 +50,67 @@ def create_job(
     you get the same job back; the work is never done twice.
     """
     job = job_service.create_or_get_job(db, payload, idempotency_key)
+    return JobAcceptedResponse(
+        job_id=job.id,
+        status=job.status,
+        status_url=f"{settings.api_v1_prefix}/jobs/{job.id}",
+    )
+
+
+# --------------------------------------------------------------------------- upload
+
+@router.post(
+    "/broll/jobs/upload",
+    response_model=JobAcceptedResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Create a job with a multipart audio file upload",
+)
+def create_job_upload(
+    audio: UploadFile = File(..., description="Audio file (mp3, wav, m4a, max 100 MB, max 10 min)"),
+    aspect_ratios: str = Form(..., description='JSON array e.g. ["16:9","9:16"]'),
+    voice: str | None = Form(default=None),
+    style: str | None = Form(default=None),
+    avoid: str | None = Form(default=None, description='JSON array e.g. ["alcohol"]'),
+    captions: str | None = Form(default=None, description='JSON object e.g. {"srt":true,"burn_in":false}'),
+    db: Session = Depends(get_db),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> JobAcceptedResponse:
+    """Accept a multipart audio upload alongside JSON form fields.
+
+    JSON clients should use POST /broll/jobs (pure JSON). This endpoint exists
+    for browser FormData uploads. Both endpoints honour Idempotency-Key.
+    """
+    from app.services.audio_service import validate_and_save
+    # Parse JSON form fields.
+    try:
+        ratios = json.loads(aspect_ratios)
+    except (json.JSONDecodeError, TypeError):
+        raise InvalidInputError("aspect_ratios must be a valid JSON array.", {"received": aspect_ratios})
+    try:
+        avoid_list = json.loads(avoid) if avoid else None
+    except (json.JSONDecodeError, TypeError):
+        raise InvalidInputError("avoid must be a valid JSON array.", {"received": avoid})
+    try:
+        captions_obj = json.loads(captions) if captions else None
+    except (json.JSONDecodeError, TypeError):
+        raise InvalidInputError("captions must be a valid JSON object.", {"received": captions})
+
+    # Save the uploaded audio temporarily to generate a stable audio_url reference.
+    upload_dir = os.path.join(settings.storage_local_root, "uploads", "tmp")
+    local_path = validate_and_save(audio, upload_dir)
+    # Use the local path as the audio_url — the STT provider will read it.
+    # We use a "file://" prefix to signal it's a local path, not an HTTP URL.
+    audio_ref = "file://" + local_path.replace("\\", "/")
+
+    req = JobCreateRequest(
+        audio_url=audio_ref,
+        aspect_ratios=ratios,
+        voice=voice,
+        style=style,
+        avoid=avoid_list,
+        captions=captions_obj,
+    )
+    job = job_service.create_or_get_job(db, req, idempotency_key)
     return JobAcceptedResponse(
         job_id=job.id,
         status=job.status,

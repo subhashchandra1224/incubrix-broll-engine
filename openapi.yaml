@@ -76,6 +76,46 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/broll/jobs/upload:
+    post:
+      tags:
+      - jobs
+      summary: Create a job with a multipart audio file upload
+      description: 'Accept a multipart audio upload alongside JSON form fields.
+
+
+        JSON clients should use POST /broll/jobs (pure JSON). This endpoint exists
+
+        for browser FormData uploads. Both endpoints honour Idempotency-Key.'
+      operationId: create_job_upload_api_v1_broll_jobs_upload_post
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_create_job_upload_api_v1_broll_jobs_upload_post'
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobAcceptedResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/jobs/{job_id}:
     get:
       tags:
@@ -266,6 +306,44 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
 components:
   schemas:
+    Body_create_job_upload_api_v1_broll_jobs_upload_post:
+      properties:
+        audio:
+          type: string
+          contentMediaType: application/octet-stream
+          title: Audio
+          description: Audio file (mp3, wav, m4a, max 100 MB, max 10 min)
+        aspect_ratios:
+          type: string
+          title: Aspect Ratios
+          description: JSON array e.g. ["16:9","9:16"]
+        voice:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Voice
+        style:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Style
+        avoid:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Avoid
+          description: JSON array e.g. ["alcohol"]
+        captions:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Captions
+          description: JSON object e.g. {"srt":true,"burn_in":false}
+      type: object
+      required:
+      - audio
+      - aspect_ratios
+      title: Body_create_job_upload_api_v1_broll_jobs_upload_post
     Captions:
       properties:
         burn_in:

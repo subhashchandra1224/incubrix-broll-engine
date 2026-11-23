@@ -32,8 +32,10 @@ class JobCreateRequest(BaseModel):
     @field_validator("audio_url")
     @classmethod
     def _validate_audio_url(cls, v: Optional[str]) -> Optional[str]:
-        if v is not None and not (v.startswith("http://") or v.startswith("https://")):
-            raise ValueError("audio_url must be an http(s) URL")
+        if v is not None and not (
+            v.startswith("http://") or v.startswith("https://") or v.startswith("file://")
+        ):
+            raise ValueError("audio_url must be an http(s) URL or a file:// local path")
         return v
 
     @field_validator("callback_url")

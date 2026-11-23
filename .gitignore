@@ -26,6 +26,9 @@ backend/data/
 backend/storage/
 backend/storage_test/
 
+# ---- Test results (generated; not committed) ----
+test_results/
+
 # ---- Transient helper artifacts ----
 assignment_extract.log
 pip_install.log

@@ -40,6 +40,7 @@ for _cred in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "PEXELS_API_KEY", "PIXABAY_
 # into the repository.
 _TMP = tempfile.mkdtemp(prefix="broll_test_")
 os.environ["DATABASE_URL"] = f"sqlite:///{os.path.join(_TMP, 'test_broll.db')}"
+os.environ["STORAGE_BACKEND"] = "local"
 os.environ["STORAGE_LOCAL_ROOT"] = _TMP
 atexit.register(shutil.rmtree, _TMP, ignore_errors=True)
 

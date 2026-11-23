@@ -46,13 +46,17 @@ def ready() -> JSONResponse:
 
     # Storage: the local root must be creatable and writable.
     try:
-        root = os.path.abspath(settings.storage_local_root)
-        os.makedirs(root, exist_ok=True)
-        probe = os.path.join(root, ".ready_probe")
-        with open(probe, "w") as fh:
-            fh.write("ok")
-        os.remove(probe)
-        checks["storage"] = {"status": "ready", "backend": settings.storage_backend, "root": root}
+        from app.utils.storage import get_storage
+        store = get_storage()
+        storage_ok = store.available()
+        if storage_ok:
+            checks["storage"] = {
+                "status": "ready",
+                "backend": settings.storage_backend,
+                "root": settings.storage_local_root,
+            }
+        else:
+            raise RuntimeError("Storage backend check returned False")
     except Exception as exc:  # noqa: BLE001
         overall = False
         checks["storage"] = {"status": "unhealthy", "error": str(exc)}

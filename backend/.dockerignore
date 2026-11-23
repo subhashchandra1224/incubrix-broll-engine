@@ -1,0 +1,15 @@
+# Exclude files from the backend Docker build context.
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+data/
+storage/
+storage_test/
+*.log
+# Credentials and secrets must never enter the image.
+.env
+.env.local

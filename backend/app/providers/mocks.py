@@ -67,6 +67,9 @@ class MockSTT(STTProvider):
     name = "mock"
 
     def transcribe(self, audio_ref: str, language: str | None = None) -> Transcript:
+        # Handle file:// local paths from uploads (strip the file:// prefix).
+        if (audio_ref or "").startswith("file://"):
+            audio_ref = audio_ref[7:]
         text = _SAMPLE_TRANSCRIPT
         duration = 15.0 + _seed_int(audio_ref or "", 20)  # 15..35s, deterministic
         words = text.split()

@@ -132,17 +132,23 @@ def to_status_dict(job: Job) -> dict:
     }
     # Add download links when the job has succeeded and outputs exist on disk.
     if job.status == "succeeded" and job.result:
+        # Prefer artifact_urls stored in the result (absolute MinIO/local URLs).
+        artifact_urls = job.result.get("artifact_urls", {})
+        prefix = settings.api_v1_prefix
+        # Build links dict: use artifact_url if present, else fall back to API endpoint.
+        links: dict[str, str] = {
+            "self": f"{prefix}/jobs/{job.id}",
+            "timeline": artifact_urls.get("timeline.json") or f"{prefix}/broll/jobs/{job.id}/timeline",
+            "manifest": artifact_urls.get("manifest.json") or f"{prefix}/broll/jobs/{job.id}/manifest",
+            "outputs": f"{prefix}/broll/jobs/{job.id}/outputs",
+        }
+        for fname, url in artifact_urls.items():
+            links[fname] = url
+        # Also scan the local output dir for any files not in artifact_urls.
         out_dir = os.path.join(settings.storage_local_root, "jobs", job.id)
         if os.path.isdir(out_dir):
-            prefix = settings.api_v1_prefix
-            links = {
-                "self": f"{prefix}/jobs/{job.id}",
-                "timeline": f"{prefix}/broll/jobs/{job.id}/timeline",
-                "manifest": f"{prefix}/broll/jobs/{job.id}/manifest",
-                "outputs": f"{prefix}/broll/jobs/{job.id}/outputs",
-            }
             for f in sorted(os.listdir(out_dir)):
-                if os.path.isfile(os.path.join(out_dir, f)):
+                if os.path.isfile(os.path.join(out_dir, f)) and f not in links:
                     links[f] = f"{prefix}/broll/jobs/{job.id}/outputs/{f}"
-            base["links"] = links
+        base["links"] = links
     return base
