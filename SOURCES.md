@@ -78,7 +78,11 @@ test path remains mock TTS only.
 | Coqui TTS (open-source, local) | Mozilla Public License 2.0 (MPL-2.0) for the library. Some model weights are CC BY-SA 4.0 (non-commercial for derivatives). **Verify model licence before using any specific model.** | MPL-2.0 permits commercial use of the library; model licence is per-model | No key required (local) | Compute cost only | **Pending verification** — accepted in principle for local/offline use; must verify model licence per-model before enabling |
 | `pyttsx3` (offline, OS TTS) | MIT; uses OS-bundled TTS (SAPI5 on Windows, espeak on Linux) | Permitted; quality is low | No | Free | **Pending** — low-quality fallback; not suitable for production demo |
 
-**Recommendation:** Coqui TTS (MPL-2.0, `tts_models/en/vctk/vits`, CC BY 3.0 — commercial use permitted) is the strongest candidate for a real TTS option. **Status: pending verification.** Model licence and commercial-use terms must be confirmed in this table before any adapter is enabled. No real TTS is wired yet.
+**Recommendation:** Coqui TTS (coqui-ai/TTS on GitHub) is the strongest candidate for a local, no-key TTS adapter.
+
+- **Library licence:** The Coqui TTS Python library (`pip install TTS`) is listed as MPL-2.0 on the GitHub repository. MPL-2.0 permits commercial use. **Verified:** the LICENSE file is accessible in the coqui-ai/TTS GitHub repository.
+- **Model licence — `tts_models/en/vctk/vits`:** Listed as CC BY 3.0 in the model card. CC BY 3.0 permits commercial use with attribution. **Status: pending — model card and licence URL must be confirmed before the adapter is enabled.** The adapter interface is designed and the `TTSProvider` base class is ready; enabling requires `pip install TTS` (requires torch, ~4 GB) and a one-line provider registration in `app/providers/factory.py`.
+- **Status: NOT ENABLED in this submission.** No TTS library or model was downloaded or invoked. All test outputs use mock TTS labelled `test_data=True`.
 
 
 
@@ -94,7 +98,7 @@ version, and commercial-use status verified and recorded before enabling.
 | Speech-to-text | mock (deterministic transcript + timestamps) | TBD (e.g. faster-whisper / Whisper API) - verify terms first | mock implemented (Phase 4); real adapter pending |
 | Text-to-speech | mock (duration + synthetic word timeline, no audio file yet) | TBD - must verify commercial-use terms | mock implemented (Phase 4); real adapter pending |
 | Scene understanding / visual description | mock (rule-based noun-phrase extraction + Phase 5 segmentation) | TBD (LLM) - verify terms first | mock implemented (Phase 5); real adapter pending |
-| Semantic embeddings | mock (deterministic bag-of-words) **OR** `local-minilm` (fastembed/MiniLM-L6-v2, Apache-2.0) | sentence-transformers/all-MiniLM-L6-v2 via fastembed | mock default (Phase 4); `local-minilm` optional adapter implemented (Phase 5); **MiniLM ranking pending verification** (model download failed in sandbox; 8 disambiguation tests skipped) |
+| Semantic embeddings | mock (deterministic bag-of-words) **OR** `local-minilm` (fastembed/MiniLM-L6-v2, Apache-2.0) | sentence-transformers/all-MiniLM-L6-v2 via fastembed | mock default; `local-minilm` optional adapter implemented (Phase 5); **8 disambiguation tests skipped — model ONNX not cached (HuggingFace connection failed in sandbox)**. fastembed 0.9.1 licence confirmed **Apache-2.0** from installed dist-info. |
 | Footage search | mock (deterministic clips with explicit mock test-data licence) | TBD (e.g. Pexels/Pixabay) - licences verified first | mock implemented (Phase 4); real adapter pending |
 | Safety | mock (avoid-term + hardcoded blocklists for people/brands/sensitive/alcohol) | TBD (LLM + NER) - verify terms first | mock implemented (Phase 5); real NER/vision pending |
 | Vision-language relevance (Outstanding) | - | TBD (e.g. CLIP, MIT) | not started |
